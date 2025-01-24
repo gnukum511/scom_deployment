@@ -1,0 +1,62 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  terraformWorkingDirectory: './terraform'
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.x'
+
+- task: InstallTerraform@0
+  displayName: "Install Terraform"
+  inputs:
+    terraformVersion: 'latest'
+
+- task: AzureCLI@2
+  displayName: "Azure Login"
+  inputs:
+    azureSubscription: 'Your-Azure-Subscription'
+
+- script: |
+    terraform init -input=false
+    terraform validate
+  workingDirectory: $(terraformWorkingDirectory)
+  displayName: "Terraform Init & Validate"
+
+- script: |
+    terraform plan -out=tfplan -input=false
+  workingDirectory: $(terraformWorkingDirectory)
+  displayName: "Terraform Plan"
+
+- script: |
+    terraform apply -input=false tfplan
+  workingDirectory: $(terraformWorkingDirectory)
+  displayName: "Terraform Apply"
+
+- script: |
+    powershell -ExecutionPolicy Unrestricted -File ./scripts/install_mgmt_pack.ps1
+  displayName: "Deploy SCOM Management Pack"
+
+- script: |
+    powershell -ExecutionPolicy Unrestricted -File ./scripts/install_scom_agent.ps1
+  displayName: "Install SCOM Agent on Windows"
+
+- script: |
+    bash ./scripts/install_scom_agent.sh
+  displayName: "Install SCOM Agent on Linux"
+
+- script: |
+    echo "Validation of SCOM agents..."
+    # Add validation commands here
+  displayName: "Validate Deployment"
+
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: $(terraformWorkingDirectory)
+    artifact: 'TerraformState'
+    publishLocation: 'Pipeline'
